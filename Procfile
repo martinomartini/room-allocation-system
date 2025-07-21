@@ -1,1 +1,1 @@
-web: python src/main.py
+web: python room_allocation_flask/src/main.py
