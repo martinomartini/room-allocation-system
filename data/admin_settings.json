@@ -1,0 +1,7 @@
+{
+  "welcome_text": "Welcome to the Room Allocation System",
+  "project_room_instructions": "Please submit your team preferences for project rooms.",
+  "oasis_instructions": "Please select your preferred days for Oasis workspace.",
+  "allocation_period": "Current Week",
+  "last_reset": null
+}
