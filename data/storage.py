@@ -9,9 +9,25 @@ import threading
 import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-import fcntl
 import tempfile
 import shutil
+import platform
+
+# Cross-platform file locking
+try:
+    import fcntl
+    HAS_FCNTL = True
+except ImportError:
+    HAS_FCNTL = False
+    # For Windows or systems without fcntl
+    if platform.system() == 'Windows':
+        try:
+            import msvcrt
+            HAS_MSVCRT = True
+        except ImportError:
+            HAS_MSVCRT = False
+    else:
+        HAS_MSVCRT = False
 
 
 class DataStorage:
@@ -65,16 +81,46 @@ class DataStorage:
                 with open(file_path, 'w') as f:
                     json.dump(default_structures[file_key], f, indent=2)
     
+    def _lock_file(self, file_obj, lock_type='shared'):
+        """Cross-platform file locking"""
+        if HAS_FCNTL:
+            # Unix-like systems
+            if lock_type == 'exclusive':
+                fcntl.flock(file_obj.fileno(), fcntl.LOCK_EX)
+            else:
+                fcntl.flock(file_obj.fileno(), fcntl.LOCK_SH)
+        elif HAS_MSVCRT:
+            # Windows systems
+            try:
+                if lock_type == 'exclusive':
+                    msvcrt.locking(file_obj.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    msvcrt.locking(file_obj.fileno(), msvcrt.LK_NBLCK, 1)
+            except IOError:
+                # Lock failed, continue without locking
+                pass
+        # For systems without any locking, continue without locking
+    
+    def _unlock_file(self, file_obj):
+        """Cross-platform file unlocking"""
+        if HAS_FCNTL:
+            fcntl.flock(file_obj.fileno(), fcntl.LOCK_UN)
+        elif HAS_MSVCRT:
+            try:
+                msvcrt.locking(file_obj.fileno(), msvcrt.LK_UNLCK, 1)
+            except IOError:
+                pass
+    
     def _read_file_with_lock(self, file_path: str) -> Any:
         """Read JSON file with file locking"""
         try:
             with open(file_path, 'r') as f:
                 # Apply shared lock for reading
-                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                self._lock_file(f, 'shared')
                 try:
                     data = json.load(f)
                 finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    self._unlock_file(f)
                 return data
         except (FileNotFoundError, json.JSONDecodeError):
             return [] if file_path.endswith('preferences.json') or file_path.endswith('allocations.json') or file_path.endswith('archive.json') else {}
@@ -87,13 +133,13 @@ class DataStorage:
             temp_path = temp_f.name
             
             # Apply exclusive lock for writing
-            fcntl.flock(temp_f.fileno(), fcntl.LOCK_EX)
+            self._lock_file(temp_f, 'exclusive')
             try:
                 json.dump(data, temp_f, indent=2, default=str)
                 temp_f.flush()
                 os.fsync(temp_f.fileno())
             finally:
-                fcntl.flock(temp_f.fileno(), fcntl.LOCK_UN)
+                self._unlock_file(temp_f)
         
         # Atomically replace the original file
         shutil.move(temp_path, file_path)

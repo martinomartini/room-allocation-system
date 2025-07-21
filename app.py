@@ -4,6 +4,7 @@ Room Allocation System - Main Streamlit Application
 
 import streamlit as st
 import pandas as pd
+import os
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
@@ -16,6 +17,9 @@ from logic.allocation import ProjectRoomAllocator, OasisAllocator
 from ui.components import render_capacity_info, render_allocation_matrix
 from utils.helpers import format_date, get_current_week_dates, parse_preferred_days_from_oasis_pref
 from utils.security import security_manager, input_validator, rate_limiter, session_manager
+
+# Railway deployment support
+PORT = int(os.environ.get("PORT", 8501))
 
 
 # Page configuration
